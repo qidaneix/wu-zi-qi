@@ -29,7 +29,7 @@ import { Component, Vue } from "vue-property-decorator";
 import QiZi from "./components/qi-zi.vue";
 
 // 棋盘上的交叉点
-export interface Dot {
+interface Dot {
   position: [number, number];
   color: undefined | "white" | "black";
 }
@@ -52,7 +52,7 @@ for (let y = 0; y <= 20; y++) {
     QiZi
   }
 })
-export default class App extends Vue {
+export default class extends Vue {
   dots = dots;
 
   // 已经落子点
@@ -76,6 +76,7 @@ export default class App extends Vue {
     // 获取棋子颜色
     const color = event.dataTransfer.getData("text");
     console.log(color);
+    console.log(color.length);
     if (color !== "black" && color !== "white") {
       console.error("不能这样拖拽");
       return;
@@ -141,13 +142,13 @@ export default class App extends Vue {
 
   // 计算连子
   calcuDots(originDot: Dot, direction: "x" | "y" | "xy" | "yx") {
-    const contDot: Dot[] = [originDot];
+    const contDots: Dot[] = [originDot];
     // 性能优化
     switch (direction) {
       case "x":
         for (let i = 1; i <= 4; i++) {
           if (originDot.position[0] - i >= 0) {
-            contDot.unshift(
+            contDots.unshift(
               this.dots[
                 this.calcuIndex(
                   originDot.position[0] - i,
@@ -157,7 +158,7 @@ export default class App extends Vue {
             );
           }
           if (originDot.position[0] + i <= 20) {
-            contDot.push(
+            contDots.push(
               this.dots[
                 this.calcuIndex(
                   originDot.position[0] + i,
@@ -171,7 +172,7 @@ export default class App extends Vue {
       case "y":
         for (let i = 1; i <= 4; i++) {
           if (originDot.position[1] - i >= 0) {
-            contDot.unshift(
+            contDots.unshift(
               this.dots[
                 this.calcuIndex(
                   originDot.position[0],
@@ -181,7 +182,7 @@ export default class App extends Vue {
             );
           }
           if (originDot.position[1] + i <= 20) {
-            contDot.push(
+            contDots.push(
               this.dots[
                 this.calcuIndex(
                   originDot.position[0],
@@ -194,8 +195,11 @@ export default class App extends Vue {
         break;
       case "xy":
         for (let i = 1; i <= 4; i++) {
-          if (originDot.position[0] - i >= 0) {
-            contDot.unshift(
+          if (
+            originDot.position[0] - i >= 0 &&
+            originDot.position[1] + i <= 20
+          ) {
+            contDots.unshift(
               this.dots[
                 this.calcuIndex(
                   originDot.position[0] - i,
@@ -204,8 +208,11 @@ export default class App extends Vue {
               ]
             );
           }
-          if (originDot.position[0] + i <= 20) {
-            contDot.push(
+          if (
+            originDot.position[0] + i <= 20 &&
+            originDot.position[1] - i >= 0
+          ) {
+            contDots.push(
               this.dots[
                 this.calcuIndex(
                   originDot.position[0] + i,
@@ -218,8 +225,11 @@ export default class App extends Vue {
         break;
       case "yx":
         for (let i = 1; i <= 4; i++) {
-          if (originDot.position[0] - i >= 0) {
-            contDot.unshift(
+          if (
+            originDot.position[0] - i >= 0 &&
+            originDot.position[1] - i >= 0
+          ) {
+            contDots.unshift(
               this.dots[
                 this.calcuIndex(
                   originDot.position[0] - i,
@@ -228,8 +238,11 @@ export default class App extends Vue {
               ]
             );
           }
-          if (originDot.position[0] + i <= 20) {
-            contDot.push(
+          if (
+            originDot.position[0] + i <= 20 &&
+            originDot.position[1] + i <= 20
+          ) {
+            contDots.push(
               this.dots[
                 this.calcuIndex(
                   originDot.position[0] + i,
@@ -241,7 +254,7 @@ export default class App extends Vue {
         }
         break;
     }
-    return contDot;
+    return contDots;
   }
 
   // 计算一个dot数组内是否有连续的五个相同颜色，dot数组长度5-9
