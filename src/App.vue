@@ -75,6 +75,7 @@ export default class App extends Vue {
     }
     // 获取棋子颜色
     const color = event.dataTransfer.getData("text");
+    console.log(color);
     if (color !== "black" && color !== "white") {
       console.error("不能这样拖拽");
       return;
