@@ -75,14 +75,17 @@ export default class extends Vue {
     }
     // 获取棋子颜色
     const color = event.dataTransfer.getData("text");
-    console.log(color);
-    console.log(color.length);
+    // 如果不是从棋盅拖拽的，color值可能为' '
     if (color !== "black" && color !== "white") {
       console.error("不能这样拖拽");
       return;
     }
     // 鼠标下落到小方块中的位置
     const dropPosition: [number, number] = [event.offsetX, event.offsetY];
+    if (dropPosition[0] > 32 || dropPosition[0] > 32) {
+      console.error("没有拖拽到棋盘上");
+      return;
+    }
     // 棋子应该定位的位置，初始值为**小方块的offset位置**
     const position: [number, number] = [
       (event.target as HTMLDivElement).offsetLeft / 32,
