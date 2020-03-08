@@ -24,6 +24,7 @@
       <div
         class="qi-zi-guan white"
         draggable="true"
+        v-if="!isComputerGame"
         @dragstart="dragstart($event, 'white')"
       >
         <div class="inner"></div>
@@ -63,10 +64,16 @@ for (let y = 0; y <= 20; y++) {
 })
 export default class extends Vue {
   dots = dots;
+  isComputerGame = false; // 人机博弈标志位
 
   // 已经落子点
   get realDots() {
     return this.dots.filter(dot => dot.color);
+  }
+
+  // 钩子
+  mounted() {
+    this.isComputerGame = confirm("是否选择人机博弈？");
   }
 
   // 拿子
@@ -140,173 +147,357 @@ export default class extends Vue {
     }
     matchDot.color = newDot.color;
     setTimeout(() => {
-      if (this.isWin(matchDot)) {
-        const restart = confirm(
-          `${matchDot.color === "black" ? "黑棋" : "白棋"}胜！是否重开？`
-        );
-        if (restart) {
-          this.dots.forEach(dot => (dot.color = undefined));
-        }
-      }
+      this.isWinAndNext(matchDot);
     }, 100);
   }
 
   // 计算落子方是否胜利
-  isWin(originDot: Dot) {
-    // 以originDot为起点建立四个方向上的数组(横，竖，斜杠，反斜杠)
-    const xDots = this.calcuDots(originDot, "x"); // 横
-    const yDots = this.calcuDots(originDot, "y"); // 竖
-    const xyDots = this.calcuDots(originDot, "xy"); // 斜杠
-    const yxDots = this.calcuDots(originDot, "yx"); // 反斜杠
-    // 上面四个数组中，任意一个数组有连续的五个元素的为相同的color（与origin.color相同）为胜利
-    return (
-      this.calcuWin(xDots, originDot.color as "white" | "black") ||
-      this.calcuWin(yDots, originDot.color as "white" | "black") ||
-      this.calcuWin(xyDots, originDot.color as "white" | "black") ||
-      this.calcuWin(yxDots, originDot.color as "white" | "black")
-    );
+  isWinAndNext(matchDot: Dot) {
+    // 以matchDot为起点建立四个方向上(横，竖，斜杠，反斜杠)的，color相同的数组，长度1-9
+    const xDots = this.calcuDots(matchDot, "x"); // 横
+    const yDots = this.calcuDots(matchDot, "y"); // 竖
+    const xyDots = this.calcuDots(matchDot, "xy"); // 斜杠
+    const yxDots = this.calcuDots(matchDot, "yx"); // 反斜杠
+    /**
+     * 计算落子方是否胜利：
+     * 上面四个数组中，任意一个数组length大于5，则matchDot.color胜利
+     *  */
+    if (
+      xDots.length > 4 ||
+      yDots.length > 4 ||
+      xyDots.length > 4 ||
+      yxDots.length > 4
+    ) {
+      const restart = confirm(
+        `${matchDot.color === "black" ? "黑棋" : "白棋"}胜！是否重开？`
+      );
+      if (restart) {
+        this.dots.forEach(dot => (dot.color = undefined));
+      }
+    } else if (this.isComputerGame && matchDot.color === "black") {
+      // 若没有大于5的，且轮到白棋下子，且为电脑对弈
+      const dotsObj = {
+        x: xDots,
+        y: yDots,
+        xy: xyDots,
+        yx: yxDots
+      };
+      const firLongDotsObj = this.findMaxDots(dotsObj);
+      if (!this.computerAddQizi(firLongDotsObj)) {
+        delete dotsObj[firLongDotsObj.direction as "x" | "y" | "xy" | "yx"];
+        const secLongDotsObj = this.findMaxDots(dotsObj);
+        if (!this.computerAddQizi(secLongDotsObj)) {
+          delete dotsObj[firLongDotsObj.direction as "x" | "y" | "xy" | "yx"];
+          const thrLongDotsObj = this.findMaxDots(dotsObj);
+          if (!this.computerAddQizi(thrLongDotsObj)) {
+            delete dotsObj[firLongDotsObj.direction as "x" | "y" | "xy" | "yx"];
+            const fouLongDotsObj = this.findMaxDots(dotsObj);
+            if (!this.computerAddQizi(fouLongDotsObj)) {
+              // 四个方向都被封死，随便落子
+              const undeDot = this.dots.find(dot => !dot.color);
+              if (undeDot) {
+                undeDot.color = "white";
+              } else {
+                // 这都不行？？？game over
+                alert("game over");
+                window.location.reload();
+              }
+            }
+          }
+        }
+      }
+    }
   }
 
   // 计算连子
-  calcuDots(originDot: Dot, direction: "x" | "y" | "xy" | "yx") {
-    const contDots: Dot[] = [originDot];
+  calcuDots(dot: Dot, direction: "x" | "y" | "xy" | "yx") {
     /**
-     * 性能优化：
-     * 1. switch性能比if好
-     * 2. 之前为了节约代码，先for再switch，但每次循环都要switch一遍，
-     * 现在只需要switch一遍再尽心for循环
+     * 再次优化：
+     * 1. 只收集相同颜色的棋子，不再收集所有棋子
+     * 2. 尽可能少的减少循环次数(previousFlag与nextFlag都为false，则停止循环)
+     * 3. 充分利用&&的短路计算避免if判断复杂
+     * 4. 计算结果既可以用于判断胜利，又可以用于电脑对弈，避免重复计算
+     * 5. if-else简化写法，提升可读性
+     * 6. 不再需要calcuWin这个超高时间复杂度的方法
      */
+    const contDots: Dot[] = [dot];
+    let previousFlag = true; // 能否继续往前找的标志
+    let nextFlag = true; // 能否继续往后找的标志
     switch (direction) {
       case "x":
         for (let i = 1; i <= 4; i++) {
-          if (originDot.position[0] - i >= 0) {
+          if (
+            previousFlag && // flag合法
+            dot.position[0] - i >= 0 && // 索引位置合法
+            this.dots[this.calcuIndex(dot.position[0] - i, dot.position[1])]
+              .color === dot.color // 索引位置颜色匹配
+          )
             contDots.unshift(
-              this.dots[
-                this.calcuIndex(
-                  originDot.position[0] - i,
-                  originDot.position[1]
-                )
-              ]
+              this.dots[this.calcuIndex(dot.position[0] - i, dot.position[1])]
             );
-          }
-          if (originDot.position[0] + i <= 20) {
+          else previousFlag = false;
+
+          if (
+            nextFlag &&
+            dot.position[0] + i <= 20 &&
+            this.dots[this.calcuIndex(dot.position[0] + i, dot.position[1])]
+              .color === dot.color
+          )
             contDots.push(
-              this.dots[
-                this.calcuIndex(
-                  originDot.position[0] + i,
-                  originDot.position[1]
-                )
-              ]
+              this.dots[this.calcuIndex(dot.position[0] + i, dot.position[1])]
             );
-          }
+          else nextFlag = false;
+
+          if (!previousFlag && !nextFlag) break;
         }
         break;
+
       case "y":
         for (let i = 1; i <= 4; i++) {
-          if (originDot.position[1] - i >= 0) {
+          if (
+            previousFlag &&
+            dot.position[1] - i >= 0 &&
+            this.dots[this.calcuIndex(dot.position[0], dot.position[1] - i)]
+              .color === dot.color
+          )
             contDots.unshift(
-              this.dots[
-                this.calcuIndex(
-                  originDot.position[0],
-                  originDot.position[1] - i
-                )
-              ]
+              this.dots[this.calcuIndex(dot.position[0], dot.position[1] - i)]
             );
-          }
-          if (originDot.position[1] + i <= 20) {
+          else previousFlag = false;
+
+          if (
+            nextFlag &&
+            dot.position[1] + i <= 20 &&
+            this.dots[this.calcuIndex(dot.position[0], dot.position[1] + i)]
+              .color === dot.color
+          )
             contDots.push(
-              this.dots[
-                this.calcuIndex(
-                  originDot.position[0],
-                  originDot.position[1] + i
-                )
-              ]
+              this.dots[this.calcuIndex(dot.position[0], dot.position[1] + i)]
             );
-          }
+          else nextFlag = false;
+
+          if (!previousFlag && !nextFlag) break;
         }
         break;
+
       case "xy":
         for (let i = 1; i <= 4; i++) {
           if (
-            originDot.position[0] - i >= 0 &&
-            originDot.position[1] + i <= 20
-          ) {
+            previousFlag &&
+            dot.position[0] - i >= 0 &&
+            dot.position[1] + i <= 20 &&
+            this.dots[this.calcuIndex(dot.position[0] - i, dot.position[1] + i)]
+              .color === dot.color
+          )
             contDots.unshift(
               this.dots[
-                this.calcuIndex(
-                  originDot.position[0] - i,
-                  originDot.position[1] + i
-                )
+                this.calcuIndex(dot.position[0] - i, dot.position[1] + i)
               ]
             );
-          }
+          else previousFlag = false;
+
           if (
-            originDot.position[0] + i <= 20 &&
-            originDot.position[1] - i >= 0
-          ) {
+            nextFlag &&
+            dot.position[0] + i <= 20 &&
+            dot.position[1] - i >= 0 &&
+            this.dots[this.calcuIndex(dot.position[0] + i, dot.position[1] - i)]
+              .color === dot.color
+          )
             contDots.push(
               this.dots[
-                this.calcuIndex(
-                  originDot.position[0] + i,
-                  originDot.position[1] - i
-                )
+                this.calcuIndex(dot.position[0] + i, dot.position[1] - i)
               ]
             );
-          }
+          else nextFlag = false;
+
+          if (!previousFlag && !nextFlag) break;
         }
         break;
+
       case "yx":
         for (let i = 1; i <= 4; i++) {
           if (
-            originDot.position[0] - i >= 0 &&
-            originDot.position[1] - i >= 0
-          ) {
+            previousFlag &&
+            dot.position[0] - i >= 0 &&
+            dot.position[1] - i >= 0 &&
+            this.dots[this.calcuIndex(dot.position[0] - i, dot.position[1] - i)]
+              .color === dot.color
+          )
             contDots.unshift(
               this.dots[
-                this.calcuIndex(
-                  originDot.position[0] - i,
-                  originDot.position[1] - i
-                )
+                this.calcuIndex(dot.position[0] - i, dot.position[1] - i)
               ]
             );
-          }
+          else previousFlag = false;
+
           if (
-            originDot.position[0] + i <= 20 &&
-            originDot.position[1] + i <= 20
-          ) {
+            nextFlag &&
+            dot.position[0] + i <= 20 &&
+            dot.position[1] + i <= 20 &&
+            this.dots[this.calcuIndex(dot.position[0] + i, dot.position[1] + i)]
+              .color === dot.color
+          )
             contDots.push(
               this.dots[
-                this.calcuIndex(
-                  originDot.position[0] + i,
-                  originDot.position[1] + i
-                )
+                this.calcuIndex(dot.position[0] + i, dot.position[1] + i)
               ]
             );
-          }
+          else nextFlag = false;
+
+          if (!previousFlag && !nextFlag) break;
         }
         break;
     }
     return contDots;
   }
 
-  // 计算一个dot数组内是否有连续的五个相同颜色，dot数组长度5-9
-  calcuWin(contDots: Dot[], color: "black" | "white") {
-    let flag = false;
-    // 包含连续5个元素的数组数量
-    const fiveDotsNum = contDots.length - 4;
-    // 遍历父数组中所有可能的5元素子数组
-    for (let i = 0; i < fiveDotsNum; i++) {
-      // 生成子数组
-      const subDots = contDots.slice(i, i + 5);
-      // 满足条件，修改标志位
-      if (subDots.every(dot => dot.color === color)) {
-        flag = true;
-        break;
-      }
-    }
-    return flag;
+  // 找到最多的点的数组及其方向
+  findMaxDots(dotsObj: { [key: string]: Dot[] }) {
+    const directions = Object.keys(dotsObj);
+    // 找到最长长度
+    const max = Math.max(
+      ...directions.map(direction => dotsObj[direction].length)
+    );
+    const dir = directions.find(direction => dotsObj[direction].length === max);
+    return { direction: dir as string, dots: dotsObj[dir as string] };
   }
 
+  // 电脑落子
+  computerAddQizi(singleDotsObj: { direction: string; dots: Dot[] }) {
+    const direction = singleDotsObj.direction; // 黑子数组的方向
+    const dots = singleDotsObj.dots; // 黑子数组
+    switch (direction) {
+      case "x":
+        if (
+          dots[0].position[0] - 1 >= 0 &&
+          !this.dots[
+            this.calcuIndex(dots[0].position[0] - 1, dots[0].position[1])
+          ].color
+        ) {
+          // 向前方向
+          this.dots[
+            this.calcuIndex(dots[0].position[0] - 1, dots[0].position[1])
+          ].color = "white";
+          return true;
+        } else if (
+          dots[dots.length - 1].position[0] + 1 <= 20 &&
+          !this.dots[
+            this.calcuIndex(
+              dots[dots.length - 1].position[0] + 1,
+              dots[dots.length - 1].position[1]
+            )
+          ].color
+        ) {
+          // 向后方向
+          this.dots[
+            this.calcuIndex(
+              dots[dots.length - 1].position[0] + 1,
+              dots[dots.length - 1].position[1]
+            )
+          ].color = "white";
+          return true;
+        }
+        return false;
+
+      case "y":
+        if (
+          dots[0].position[1] - 1 >= 0 &&
+          !this.dots[
+            this.calcuIndex(dots[0].position[0], dots[0].position[1] - 1)
+          ].color
+        ) {
+          this.dots[
+            this.calcuIndex(dots[0].position[0], dots[0].position[1] - 1)
+          ].color = "white";
+          return true;
+        } else if (
+          dots[dots.length - 1].position[1] + 1 <= 20 &&
+          !this.dots[
+            this.calcuIndex(
+              dots[dots.length - 1].position[0],
+              dots[dots.length - 1].position[1] + 1
+            )
+          ].color
+        ) {
+          this.dots[
+            this.calcuIndex(
+              dots[dots.length - 1].position[0],
+              dots[dots.length - 1].position[1] + 1
+            )
+          ].color = "white";
+          return true;
+        }
+        return false;
+
+      case "xy":
+        if (
+          dots[0].position[0] - 1 >= 0 &&
+          dots[0].position[1] + 1 <= 20 &&
+          !this.dots[
+            this.calcuIndex(dots[0].position[0] - 1, dots[0].position[1] + 1)
+          ].color
+        ) {
+          this.dots[
+            this.calcuIndex(dots[0].position[0] - 1, dots[0].position[1] + 1)
+          ].color = "white";
+          return true;
+        } else if (
+          dots[dots.length - 1].position[0] + 1 <= 20 &&
+          dots[dots.length - 1].position[1] - 1 >= 0 &&
+          !this.dots[
+            this.calcuIndex(
+              dots[dots.length - 1].position[0] + 1,
+              dots[dots.length - 1].position[1] - 1
+            )
+          ].color
+        ) {
+          this.dots[
+            this.calcuIndex(
+              dots[dots.length - 1].position[0] + 1,
+              dots[dots.length - 1].position[1] - 1
+            )
+          ].color = "white";
+          return true;
+        }
+        return false;
+
+      case "yx":
+        if (
+          dots[0].position[0] - 1 >= 0 &&
+          dots[0].position[1] - 1 >= 0 &&
+          !this.dots[
+            this.calcuIndex(dots[0].position[0] - 1, dots[0].position[1] - 1)
+          ].color
+        ) {
+          this.dots[
+            this.calcuIndex(dots[0].position[0] - 1, dots[0].position[1] - 1)
+          ].color = "white";
+          return true;
+        } else if (
+          dots[dots.length - 1].position[0] + 1 <= 20 &&
+          dots[dots.length - 1].position[1] + 1 <= 20 &&
+          !this.dots[
+            this.calcuIndex(
+              dots[dots.length - 1].position[0] + 1,
+              dots[dots.length - 1].position[1] + 1
+            )
+          ].color
+        ) {
+          this.dots[
+            this.calcuIndex(
+              dots[dots.length - 1].position[0] + 1,
+              dots[dots.length - 1].position[1] + 1
+            )
+          ].color = "white";
+          return true;
+        }
+        return false;
+    }
+    // 程序不可能走到这里
+    throw new Error("something wrong");
+  }
+
+  // 找到对应坐标的dots数组索引
   calcuIndex(x: number, y: number) {
     return x + y * 21;
   }
