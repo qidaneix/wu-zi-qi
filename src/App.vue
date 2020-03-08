@@ -123,7 +123,10 @@ export default class extends Vue {
 
   // 落子
   addQiZi(newDot: { position: [number, number]; color: "white" | "black" }) {
-    // 性能优化，之前使用数组的find的方法，现在直接根据(x,y)定位数组中的索引
+    /**
+     * 性能优化：
+     * 之前使用数组的find的方法，现在直接根据(x,y)定位数组中的索引
+     */
     const matchDot = this.dots[
       this.calcuIndex(newDot.position[0], newDot.position[1])
     ];
@@ -167,7 +170,12 @@ export default class extends Vue {
   // 计算连子
   calcuDots(originDot: Dot, direction: "x" | "y" | "xy" | "yx") {
     const contDots: Dot[] = [originDot];
-    // 性能优化
+    /**
+     * 性能优化：
+     * 1. switch性能比if好
+     * 2. 之前为了节约代码，先for再switch，但每次循环都要switch一遍，
+     * 现在只需要switch一遍再尽心for循环
+     */
     switch (direction) {
       case "x":
         for (let i = 1; i <= 4; i++) {
