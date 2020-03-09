@@ -153,7 +153,7 @@ export default class extends Vue {
 
   // 计算落子方是否胜利
   isWinAndNext(matchDot: Dot) {
-    // 以matchDot为起点建立四个方向上(横，竖，斜杠，反斜杠)的，color相同的数组，长度1-9
+    // 以matchDot为原点建立四个方向上(横，竖，斜杠，反斜杠)的，color相同的数组，长度1-9
     const xDots = this.calcuDots(matchDot, "x"); // 横
     const yDots = this.calcuDots(matchDot, "y"); // 竖
     const xyDots = this.calcuDots(matchDot, "xy"); // 斜杠
@@ -182,21 +182,35 @@ export default class extends Vue {
         xy: xyDots,
         yx: yxDots
       };
+      /**
+       * debug：没有处理电脑获胜的情况！
+       */
+      // 电脑下的白棋
+      let computerQizi: Dot | false;
       const firLongDotsObj = this.findMaxDots(dotsObj);
-      if (!this.computerAddQizi(firLongDotsObj)) {
+      computerQizi = this.computerAddQizi(firLongDotsObj);
+
+      if (!computerQizi) {
         delete dotsObj[firLongDotsObj.direction as "x" | "y" | "xy" | "yx"];
         const secLongDotsObj = this.findMaxDots(dotsObj);
-        if (!this.computerAddQizi(secLongDotsObj)) {
-          delete dotsObj[firLongDotsObj.direction as "x" | "y" | "xy" | "yx"];
+        computerQizi = this.computerAddQizi(secLongDotsObj);
+
+        if (!computerQizi) {
+          delete dotsObj[secLongDotsObj.direction as "x" | "y" | "xy" | "yx"];
           const thrLongDotsObj = this.findMaxDots(dotsObj);
-          if (!this.computerAddQizi(thrLongDotsObj)) {
-            delete dotsObj[firLongDotsObj.direction as "x" | "y" | "xy" | "yx"];
+          computerQizi = this.computerAddQizi(thrLongDotsObj);
+
+          if (!computerQizi) {
+            delete dotsObj[thrLongDotsObj.direction as "x" | "y" | "xy" | "yx"];
             const fouLongDotsObj = this.findMaxDots(dotsObj);
-            if (!this.computerAddQizi(fouLongDotsObj)) {
-              // 四个方向都被封死，随便落子
+            computerQizi = this.computerAddQizi(fouLongDotsObj);
+
+            if (!computerQizi) {
+              // 四个方向都被封死，随便落子 - -||
               const undeDot = this.dots.find(dot => !dot.color);
               if (undeDot) {
                 undeDot.color = "white";
+                computerQizi = undeDot;
               } else {
                 // 这都不行？？？game over
                 alert("game over");
@@ -206,6 +220,10 @@ export default class extends Vue {
           }
         }
       }
+      // 计算电脑是否胜利
+      setTimeout(() => {
+        this.isWinAndNext(computerQizi as Dot);
+      }, 100);
     }
   }
 
@@ -375,10 +393,11 @@ export default class extends Vue {
           ].color
         ) {
           // 向前方向
-          this.dots[
+          const dot = this.dots[
             this.calcuIndex(dots[0].position[0] - 1, dots[0].position[1])
-          ].color = "white";
-          return true;
+          ];
+          dot.color = "white";
+          return dot;
         } else if (
           dots[dots.length - 1].position[0] + 1 <= 20 &&
           !this.dots[
@@ -389,13 +408,14 @@ export default class extends Vue {
           ].color
         ) {
           // 向后方向
-          this.dots[
+          const dot = this.dots[
             this.calcuIndex(
               dots[dots.length - 1].position[0] + 1,
               dots[dots.length - 1].position[1]
             )
-          ].color = "white";
-          return true;
+          ];
+          dot.color = "white";
+          return dot;
         }
         return false;
 
@@ -406,10 +426,11 @@ export default class extends Vue {
             this.calcuIndex(dots[0].position[0], dots[0].position[1] - 1)
           ].color
         ) {
-          this.dots[
+          const dot = this.dots[
             this.calcuIndex(dots[0].position[0], dots[0].position[1] - 1)
-          ].color = "white";
-          return true;
+          ];
+          dot.color = "white";
+          return dot;
         } else if (
           dots[dots.length - 1].position[1] + 1 <= 20 &&
           !this.dots[
@@ -419,13 +440,14 @@ export default class extends Vue {
             )
           ].color
         ) {
-          this.dots[
+          const dot = this.dots[
             this.calcuIndex(
               dots[dots.length - 1].position[0],
               dots[dots.length - 1].position[1] + 1
             )
-          ].color = "white";
-          return true;
+          ];
+          dot.color = "white";
+          return dot;
         }
         return false;
 
@@ -437,10 +459,11 @@ export default class extends Vue {
             this.calcuIndex(dots[0].position[0] - 1, dots[0].position[1] + 1)
           ].color
         ) {
-          this.dots[
+          const dot = this.dots[
             this.calcuIndex(dots[0].position[0] - 1, dots[0].position[1] + 1)
-          ].color = "white";
-          return true;
+          ];
+          dot.color = "white";
+          return dot;
         } else if (
           dots[dots.length - 1].position[0] + 1 <= 20 &&
           dots[dots.length - 1].position[1] - 1 >= 0 &&
@@ -451,13 +474,14 @@ export default class extends Vue {
             )
           ].color
         ) {
-          this.dots[
+          const dot = this.dots[
             this.calcuIndex(
               dots[dots.length - 1].position[0] + 1,
               dots[dots.length - 1].position[1] - 1
             )
-          ].color = "white";
-          return true;
+          ];
+          dot.color = "white";
+          return dot;
         }
         return false;
 
@@ -469,10 +493,11 @@ export default class extends Vue {
             this.calcuIndex(dots[0].position[0] - 1, dots[0].position[1] - 1)
           ].color
         ) {
-          this.dots[
+          const dot = this.dots[
             this.calcuIndex(dots[0].position[0] - 1, dots[0].position[1] - 1)
-          ].color = "white";
-          return true;
+          ];
+          dot.color = "white";
+          return dot;
         } else if (
           dots[dots.length - 1].position[0] + 1 <= 20 &&
           dots[dots.length - 1].position[1] + 1 <= 20 &&
@@ -483,13 +508,14 @@ export default class extends Vue {
             )
           ].color
         ) {
-          this.dots[
+          const dot = this.dots[
             this.calcuIndex(
               dots[dots.length - 1].position[0] + 1,
               dots[dots.length - 1].position[1] + 1
             )
-          ].color = "white";
-          return true;
+          ];
+          dot.color = "white";
+          return dot;
         }
         return false;
     }
