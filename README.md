@@ -1,24 +1,5 @@
-# wu-zi-qi
+# 五子棋小游戏
 
-## Project setup
-```
-npm install
-```
+## 人机对弈算法大致流程图
 
-### Compiles and hot-reloads for development
-```
-npm run serve
-```
-
-### Compiles and minifies for production
-```
-npm run build
-```
-
-### Lints and fixes files
-```
-npm run lint
-```
-
-### Customize configuration
-See [Configuration Reference](https://cli.vuejs.org/config/).
+![人机博弈流程图](./人机博弈流程图.svg)
