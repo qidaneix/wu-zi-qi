@@ -1,24 +1,11 @@
 <template>
   <div id="app">
-    <div
-      class="qi-pan"
-      @dragenter.prevent
-      @dragover.prevent
-      @drop.prevent="drop"
-    >
+    <div class="qi-pan" @dragenter.prevent @dragover.prevent @drop.prevent="drop">
       <div class="item" v-for="i in 20 * 20" :key="i"></div>
-      <qi-zi
-        v-for="dot in realDots"
-        :dot="dot"
-        :key="JSON.stringify(dot.position)"
-      ></qi-zi>
+      <qi-zi v-for="dot in realDots" :dot="dot" :key="JSON.stringify(dot.position)"></qi-zi>
     </div>
     <div class="wrap">
-      <div
-        class="qi-zi-guan black"
-        draggable="true"
-        @dragstart="dragstart($event, 'black')"
-      >
+      <div class="qi-zi-guan black" draggable="true" @dragstart="dragstart($event, 'black')">
         <div class="inner"></div>
       </div>
       <div
@@ -179,6 +166,7 @@ export default class extends Vue {
         xy: xyDots,
         yx: yxDots
       };
+      // 获得黑子落子的四个方向的数组，开始电脑对弈
       this.computerDrop(dotsObj);
     }
   }
@@ -329,12 +317,11 @@ export default class extends Vue {
     return contDots;
   }
 
-  // 电脑博弈，电脑下的白棋
+  // 电脑博弈，电脑开始下白棋
   computerDrop(dotsObj: { [key: string]: Dot[] }) {
-    // 电脑首先尝试攻击
+    // 电脑尝试首轮进攻
     let computerQizi = this.computerAttack();
-
-    // 攻击成功
+    // 判断首轮进攻是否触发
     if (computerQizi) {
       setTimeout(() => {
         this.isWinAndNext(computerQizi as Dot);
@@ -342,54 +329,51 @@ export default class extends Vue {
       return;
     }
 
-    // 未能攻击成功，开始防御
-    const firLongDotsObj = this.findMaxDots(dotsObj);
-    computerQizi = this.computerAddQizi(firLongDotsObj);
+    // 首轮进攻未能触发，尝试首轮防御
+    computerQizi = this.computerDefense();
+    // 判断首轮防守是否触发
+    if (computerQizi) {
+      return;
+    }
 
-    if (!computerQizi) {
-      delete dotsObj[firLongDotsObj.direction as "x" | "y" | "xy" | "yx"];
-      const secLongDotsObj = this.findMaxDots(dotsObj);
-      computerQizi = this.computerAddQizi(secLongDotsObj);
+    // 首轮防御未能触发，尝试第二轮进攻
+    computerQizi = this.computerAttackSec();
+    // 判断第二轮进攻是否触发
+    if (computerQizi) {
+      return;
+    }
 
-      if (!computerQizi) {
-        delete dotsObj[secLongDotsObj.direction as "x" | "y" | "xy" | "yx"];
-        const thrLongDotsObj = this.findMaxDots(dotsObj);
-        computerQizi = this.computerAddQizi(thrLongDotsObj);
+    // 第二轮进攻未能触发，尝试第二轮防守
+    computerQizi = this.computerDefenseSec(dotsObj);
+    // 判断第二轮进攻是否触发
+    if (computerQizi) {
+      return;
+    }
 
-        if (!computerQizi) {
-          delete dotsObj[thrLongDotsObj.direction as "x" | "y" | "xy" | "yx"];
-          const fouLongDotsObj = this.findMaxDots(dotsObj);
-          computerQizi = this.computerAddQizi(fouLongDotsObj);
-
-          if (!computerQizi) {
-            // 四个方向都被封死，随便落子 - -||
-            const undeDot = this.dots.find(dot => !dot.color);
-            if (undeDot) {
-              undeDot.color = "white";
-              computerQizi = undeDot;
-            } else {
-              // 这都不行？？？game over
-              alert("game over");
-              window.location.reload();
-            }
-          }
-        }
-      }
+    // 这都不行？随便落子 - -||
+    const undeDot = this.dots.find(dot => !dot.color);
+    if (undeDot) {
+      undeDot.color = "white";
+      computerQizi = undeDot;
+    } else {
+      // 这都不行？？？game over
+      alert("game over");
+      this.dots.forEach(dot => (dot.color = undefined));
     }
   }
 
-  // 电脑尝试进攻
+  // 电脑尝试首轮进攻
   computerAttack() {
     // 寻找所有白子
     const whiteDots = this.dots.filter(dot => dot.color === "white");
+    // 寻找某白子在四个方向上的大于等于4个子的数组
     for (let i = 0; i < whiteDots.length; i++) {
       const dot = whiteDots[i];
-      // 寻找某白子在四个方向上的超过四个子的数组
       for (let j = 0; j < this.directions.length; j++) {
         const direction = this.directions[j];
         const dots = this.calcuDots(dot, direction as "x" | "y" | "xy" | "yx"); // 四个方向
+        // 若有大于等于4的白子数组，尝试追加白子！
         if (dots.length >= 4) {
-          // 若有大于4的数组，尝试首位追加白子！
           const computerQizi = this.computerAddQizi({ direction, dots });
           if (computerQizi) {
             return computerQizi;
@@ -398,6 +382,107 @@ export default class extends Vue {
       }
     }
     return false;
+  }
+
+  // 电脑尝试首轮防守
+  computerDefense() {
+    // 寻找所有黑子
+    const blackDots = this.dots.filter(dot => dot.color === "black");
+    // 寻找某黑子在四个方向上的大于等于4、大于等于3个子的数组
+    for (let i = 0; i < blackDots.length; i++) {
+      const dot = blackDots[i];
+      for (let j = 0; j < this.directions.length; j++) {
+        const direction = this.directions[j];
+        const dots = this.calcuDots(dot, direction as "x" | "y" | "xy" | "yx"); // 四个方向
+        // 若有大于等于4的黑子数组，尝试追加白子！
+        if (dots.length >= 4) {
+          const computerQizi = this.computerAddQizi({ direction, dots });
+          if (computerQizi) {
+            return computerQizi;
+          }
+        } else if (dots.length >= 3) {
+          // 若有大于等于3的黑子数组，且两边都无白子封堵，尝试追加白子！
+          if (this.needBlock({ direction, dots })) {
+            const computerQizi = this.computerAddQizi({ direction, dots });
+            if (computerQizi) {
+              return computerQizi;
+            }
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  // 电脑尝试第二轮进攻
+  computerAttackSec() {
+    // 寻找所有白子
+    const whiteDots = this.dots.filter(dot => dot.color === "white");
+    // 寻找某白子在四个方向上的大于等于3个子的数组
+    for (let i = 0; i < whiteDots.length; i++) {
+      const dot = whiteDots[i];
+      for (let j = 0; j < this.directions.length; j++) {
+        const direction = this.directions[j];
+        const dots = this.calcuDots(dot, direction as "x" | "y" | "xy" | "yx"); // 四个方向
+        // 若有大于等于3的白子数组，尝试追加白子！
+        if (dots.length >= 3) {
+          const computerQizi = this.computerAddQizi({ direction, dots });
+          if (computerQizi) {
+            return computerQizi;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  // 电脑尝试第二轮防守
+  computerDefenseSec(dotsObj: { [key: string]: Dot[] }) {
+    // 寻找所有黑子
+    const blackDots = this.dots.filter(dot => dot.color === "black");
+    // 寻找某黑子在四个方向上的大于等于2个子的数组
+    for (let i = 0; i < blackDots.length; i++) {
+      const dot = blackDots[i];
+      for (let j = 0; j < this.directions.length; j++) {
+        const direction = this.directions[j];
+        const dots = this.calcuDots(dot, direction as "x" | "y" | "xy" | "yx"); // 四个方向
+        // 若有大于等于3的黑子数组，尝试追加白子！
+        if (dots.length >= 3) {
+          const computerQizi = this.computerAddQizi({ direction, dots });
+          if (computerQizi) {
+            return computerQizi;
+          }
+        }
+      }
+    }
+
+    // 若没有至少一头未封堵的3连黑子，则根据黑子最后一次的落子点为原点进行封堵
+    // 落子点最长连子
+    let computerQizi: Dot | false = false;
+    const firLongDotsObj = this.findMaxDots(dotsObj);
+    computerQizi = this.computerAddQizi(firLongDotsObj);
+
+    if (!computerQizi) {
+      delete dotsObj[firLongDotsObj.direction as "x" | "y" | "xy" | "yx"];
+      // 落子点第二长连子
+      const secLongDotsObj = this.findMaxDots(dotsObj);
+      computerQizi = this.computerAddQizi(secLongDotsObj);
+
+      if (!computerQizi) {
+        delete dotsObj[secLongDotsObj.direction as "x" | "y" | "xy" | "yx"];
+        // 落子点第三长连子
+        const thrLongDotsObj = this.findMaxDots(dotsObj);
+        computerQizi = this.computerAddQizi(thrLongDotsObj);
+
+        if (!computerQizi) {
+          delete dotsObj[thrLongDotsObj.direction as "x" | "y" | "xy" | "yx"];
+          // 落子点第四长连子
+          const fouLongDotsObj = this.findMaxDots(dotsObj);
+          computerQizi = this.computerAddQizi(fouLongDotsObj);
+        }
+      }
+    }
+    return computerQizi;
   }
 
   // 找到最多的点的数组及其方向
@@ -409,6 +494,90 @@ export default class extends Vue {
     );
     const dir = directions.find(direction => dotsObj[direction].length === max);
     return { direction: dir as string, dots: dotsObj[dir as string] };
+  }
+
+  // 黑子在有3连子的情况下，判断连子首尾是否都可落子，若是，需要封堵
+  needBlock(singleDotsObj: { direction: string; dots: Dot[] }) {
+    const direction = singleDotsObj.direction; // 数组的方向
+    const dots = singleDotsObj.dots; // 连子数组
+    switch (direction) {
+      case "x":
+        if (
+          dots[0].position[0] - 1 >= 0 &&
+          !this.dots[
+            this.calcuIndex(dots[0].position[0] - 1, dots[0].position[1])
+          ].color &&
+          dots[dots.length - 1].position[0] + 1 <= 20 &&
+          !this.dots[
+            this.calcuIndex(
+              dots[dots.length - 1].position[0] + 1,
+              dots[dots.length - 1].position[1]
+            )
+          ].color
+        ) {
+          return true;
+        }
+        return false;
+
+      case "y":
+        if (
+          dots[0].position[1] - 1 >= 0 &&
+          !this.dots[
+            this.calcuIndex(dots[0].position[0], dots[0].position[1] - 1)
+          ].color &&
+          dots[dots.length - 1].position[1] + 1 <= 20 &&
+          !this.dots[
+            this.calcuIndex(
+              dots[dots.length - 1].position[0],
+              dots[dots.length - 1].position[1] + 1
+            )
+          ].color
+        ) {
+          return true;
+        }
+        return false;
+
+      case "xy":
+        if (
+          dots[0].position[0] - 1 >= 0 &&
+          dots[0].position[1] + 1 <= 20 &&
+          !this.dots[
+            this.calcuIndex(dots[0].position[0] - 1, dots[0].position[1] + 1)
+          ].color &&
+          dots[dots.length - 1].position[0] + 1 <= 20 &&
+          dots[dots.length - 1].position[1] - 1 >= 0 &&
+          !this.dots[
+            this.calcuIndex(
+              dots[dots.length - 1].position[0] + 1,
+              dots[dots.length - 1].position[1] - 1
+            )
+          ].color
+        ) {
+          return true;
+        }
+        return false;
+
+      case "yx":
+        if (
+          dots[0].position[0] - 1 >= 0 &&
+          dots[0].position[1] - 1 >= 0 &&
+          !this.dots[
+            this.calcuIndex(dots[0].position[0] - 1, dots[0].position[1] - 1)
+          ].color &&
+          dots[dots.length - 1].position[0] + 1 <= 20 &&
+          dots[dots.length - 1].position[1] + 1 <= 20 &&
+          !this.dots[
+            this.calcuIndex(
+              dots[dots.length - 1].position[0] + 1,
+              dots[dots.length - 1].position[1] + 1
+            )
+          ].color
+        ) {
+          return true;
+        }
+        return false;
+    }
+    return false;
   }
 
   // 电脑落子
