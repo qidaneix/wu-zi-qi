@@ -65,6 +65,7 @@ for (let y = 0; y <= 20; y++) {
 export default class extends Vue {
   dots = dots;
   isComputerGame = false; // 人机博弈标志位
+  directions = ["x", "y", "xy", "yx"]; // 四个方向(横，竖，斜杠，反斜杠)
 
   // 已经落子点
   get realDots() {
@@ -168,66 +169,25 @@ export default class extends Vue {
       xyDots.length > 4 ||
       yxDots.length > 4
     ) {
-      const restart = confirm(
-        `${matchDot.color === "black" ? "黑棋" : "白棋"}胜！是否重开？`
-      );
-      if (restart) {
-        this.dots.forEach(dot => (dot.color = undefined));
-      }
+      alert(`${matchDot.color === "black" ? "黑棋" : "白棋"}胜！`);
+      this.dots.forEach(dot => (dot.color = undefined));
     } else if (this.isComputerGame && matchDot.color === "black") {
-      // 若没有大于5的，且轮到白棋下子，且为电脑对弈
+      // 若没有大于4的，且轮到白棋下子，且为电脑对弈
       const dotsObj = {
         x: xDots,
         y: yDots,
         xy: xyDots,
         yx: yxDots
       };
-      /**
-       * debug：没有处理电脑获胜的情况！
-       */
-      // 电脑下的白棋
-      let computerQizi: Dot | false;
-      const firLongDotsObj = this.findMaxDots(dotsObj);
-      computerQizi = this.computerAddQizi(firLongDotsObj);
-
-      if (!computerQizi) {
-        delete dotsObj[firLongDotsObj.direction as "x" | "y" | "xy" | "yx"];
-        const secLongDotsObj = this.findMaxDots(dotsObj);
-        computerQizi = this.computerAddQizi(secLongDotsObj);
-
-        if (!computerQizi) {
-          delete dotsObj[secLongDotsObj.direction as "x" | "y" | "xy" | "yx"];
-          const thrLongDotsObj = this.findMaxDots(dotsObj);
-          computerQizi = this.computerAddQizi(thrLongDotsObj);
-
-          if (!computerQizi) {
-            delete dotsObj[thrLongDotsObj.direction as "x" | "y" | "xy" | "yx"];
-            const fouLongDotsObj = this.findMaxDots(dotsObj);
-            computerQizi = this.computerAddQizi(fouLongDotsObj);
-
-            if (!computerQizi) {
-              // 四个方向都被封死，随便落子 - -||
-              const undeDot = this.dots.find(dot => !dot.color);
-              if (undeDot) {
-                undeDot.color = "white";
-                computerQizi = undeDot;
-              } else {
-                // 这都不行？？？game over
-                alert("game over");
-                window.location.reload();
-              }
-            }
-          }
-        }
-      }
-      // 计算电脑是否胜利
-      setTimeout(() => {
-        this.isWinAndNext(computerQizi as Dot);
-      }, 100);
+      this.computerDrop(dotsObj);
     }
   }
 
-  // 计算连子
+  /**
+   * 计算连子
+   * 以传入的子为原点，寻找某个方向上的连续子，返回连续子构成的数组
+   * 数组方向从左向右
+   */
   calcuDots(dot: Dot, direction: "x" | "y" | "xy" | "yx") {
     /**
      * 再次优化：
@@ -369,6 +329,77 @@ export default class extends Vue {
     return contDots;
   }
 
+  // 电脑博弈，电脑下的白棋
+  computerDrop(dotsObj: { [key: string]: Dot[] }) {
+    // 电脑首先尝试攻击
+    let computerQizi = this.computerAttack();
+
+    // 攻击成功
+    if (computerQizi) {
+      setTimeout(() => {
+        this.isWinAndNext(computerQizi as Dot);
+      }, 100);
+      return;
+    }
+
+    // 未能攻击成功，开始防御
+    const firLongDotsObj = this.findMaxDots(dotsObj);
+    computerQizi = this.computerAddQizi(firLongDotsObj);
+
+    if (!computerQizi) {
+      delete dotsObj[firLongDotsObj.direction as "x" | "y" | "xy" | "yx"];
+      const secLongDotsObj = this.findMaxDots(dotsObj);
+      computerQizi = this.computerAddQizi(secLongDotsObj);
+
+      if (!computerQizi) {
+        delete dotsObj[secLongDotsObj.direction as "x" | "y" | "xy" | "yx"];
+        const thrLongDotsObj = this.findMaxDots(dotsObj);
+        computerQizi = this.computerAddQizi(thrLongDotsObj);
+
+        if (!computerQizi) {
+          delete dotsObj[thrLongDotsObj.direction as "x" | "y" | "xy" | "yx"];
+          const fouLongDotsObj = this.findMaxDots(dotsObj);
+          computerQizi = this.computerAddQizi(fouLongDotsObj);
+
+          if (!computerQizi) {
+            // 四个方向都被封死，随便落子 - -||
+            const undeDot = this.dots.find(dot => !dot.color);
+            if (undeDot) {
+              undeDot.color = "white";
+              computerQizi = undeDot;
+            } else {
+              // 这都不行？？？game over
+              alert("game over");
+              window.location.reload();
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 电脑尝试进攻
+  computerAttack() {
+    // 寻找所有白子
+    const whiteDots = this.dots.filter(dot => dot.color === "white");
+    for (let i = 0; i < whiteDots.length; i++) {
+      const dot = whiteDots[i];
+      // 寻找某白子在四个方向上的超过四个子的数组
+      for (let j = 0; j < this.directions.length; j++) {
+        const direction = this.directions[j];
+        const dots = this.calcuDots(dot, direction as "x" | "y" | "xy" | "yx"); // 四个方向
+        if (dots.length >= 4) {
+          // 若有大于4的数组，尝试首位追加白子！
+          const computerQizi = this.computerAddQizi({ direction, dots });
+          if (computerQizi) {
+            return computerQizi;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
   // 找到最多的点的数组及其方向
   findMaxDots(dotsObj: { [key: string]: Dot[] }) {
     const directions = Object.keys(dotsObj);
@@ -382,8 +413,8 @@ export default class extends Vue {
 
   // 电脑落子
   computerAddQizi(singleDotsObj: { direction: string; dots: Dot[] }) {
-    const direction = singleDotsObj.direction; // 黑子数组的方向
-    const dots = singleDotsObj.dots; // 黑子数组
+    const direction = singleDotsObj.direction; // 数组的方向
+    const dots = singleDotsObj.dots; // 连子数组
     switch (direction) {
       case "x":
         if (
@@ -553,7 +584,33 @@ export default class extends Vue {
   margin-right: auto;
   .item {
     box-sizing: border-box;
-    border: 1px solid black;
+    border-right: 1px solid black;
+    border-bottom: 1px solid black;
+    &:nth-child(20n) {
+      border-right: none;
+    }
+    &:nth-child(381),
+    &:nth-child(382),
+    &:nth-child(383),
+    &:nth-child(384),
+    &:nth-child(385),
+    &:nth-child(386),
+    &:nth-child(387),
+    &:nth-child(388),
+    &:nth-child(389),
+    &:nth-child(390),
+    &:nth-child(391),
+    &:nth-child(392),
+    &:nth-child(393),
+    &:nth-child(394),
+    &:nth-child(395),
+    &:nth-child(396),
+    &:nth-child(397),
+    &:nth-child(398),
+    &:nth-child(399),
+    &:nth-child(400) {
+      border-bottom: none;
+    }
   }
 }
 
